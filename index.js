@@ -18,6 +18,9 @@ import fs from 'fs';
 const RANGE_EXTENDER = "ShellyPlugUS";
 let SHELLY_HOST = [];
 let SHELLY_CLIENTS = [];
+let CONFIG_SSID = "";
+let CONFIG_PASS = "";
+const delay = 20000;
 
 // return a list of shelly devices available in the wifi
 function ssid_list () {
@@ -88,21 +91,67 @@ function read_file () {
 
 }
 
+function connectToSSID (SSID) {
+    try {
+        exec(`sudo nmcli dev wifi connect ${SSID}`,(err, stdout, stderr) => {
+            if(err){
+                console.error(err)
+                return;
+            }
+//            console.log(`stdout: ${stdout}`)
+//            console.log(`stderr: ${stderr}`)
+        })
+        console.log(`Connected to`,SSID)
+    } catch (error) {
+        console.log('Error Creating File',error)
+    }    
+}
+
+async function set_RANGE_EXTENDER_HOST_wifi_credentials (WIFI_SSID,WIFI_PASS) {
+    try {
+        console.log("Setting HOST WIFI Credentials\n")
+        const response = await fetch(`http://192.168.33.1/rpc/WiFi.SetConfig?config={"sta":{"ssid":"${WIFI_SSID}","pass":"${WIFI_PASS}","enable":true}}`)
+        const ret = await response.json()
+        return true
+    } catch (error) {
+        console.error("ERROR \n\n",error)
+    }
+}
+
+async function set_RANGE_EXTENDER_CLIENT_wifi_credentials (HOST_SSID) {
+    try {
+        console.log("Setting CLIENT WIFI Credentials\n")
+        const response = await fetch(`http://192.168.33.1/rpc/WiFi.SetConfig?config={"sta":{"ssid":"${HOST_SSID}","pass":"","enable":true}}`)
+        const ret = await response.json()
+        return true
+    } catch (error) {
+        console.error("ERROR \n\n",error)
+    }
+}
+
 // connect to each device for provisioning
 function provision () {
-    // connect to host
     
-    SHELLY_HOST[0]
-    //
-    // provision host
+    // connect to RANGE_EXTENDER_HOST
+    setTimeout(()=>{connectToSSID(SHELLY_HOST[0])},delay)
 
-    // provision clients
-    SHELLY_CLIENTS
+    // provision host
+    setTimeout(()=>{set_RANGE_EXTENDER_HOST_wifi_credentials(CONFIG_SSID,CONFIG_PASS)},delay)
+
+    SHELLY_CLIENTS.forEach((element,index) => {
+        console.log('Provisioning device',element,'-',index + 1,'of',SHELLY_CLIENTS.length)
+
+        // connect to RANGE_EXTENDER_CLIENT
+        setTimeout(()=>{connectToSSID(element)},delay)
+
+        // provision client
+        setTimeout(()=>{set_RANGE_EXTENDER_CLIENT_wifi_credentials(SHELLY_HOST[0])},delay)
+    });
+    
 }
 
 
 ssid_list()
-const delay = 20000
 setTimeout(()=>{read_file()},delay)
 setTimeout(()=>{provision()},delay)
 
