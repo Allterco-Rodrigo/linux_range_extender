@@ -6,26 +6,25 @@
 
 // REMEMBER TO EXECUTE ! ! !
 //
-// chmod +x search_shellyht.sh
-// chmod +x search_ShellyPlugUS.sh 
+// chmod +x search_ssid.sh
+
 
 import fetch from 'node-fetch';
 import { exec } from 'child_process'
 import fs from 'fs';
-
+import { CONFIG_PASS, CONFIG_SSID } from './config.js';
 
 // Find broadcasting PLUG US that will be our Range Extender
 const RANGE_EXTENDER = "ShellyPlugUS";
 const CLIENT_EXT = "shellyht";
+const CLIENT_GEN = 1;
 
 let SHELLY_HOST = [];
 let SHELLY_CLIENTS = [];
-let CONFIG_SSID = "";
-let CONFIG_PASS = "";
 const delay = 5000;
 
 function list_available_ssids () {
-    console.log('Searching for Available SSIDs in the Network\n')
+    console.log('Searching for Available SSIDs in the Network')
     
     try {
         exec('./search_ssid.sh',(err, stdout, stderr) => {
@@ -33,21 +32,16 @@ function list_available_ssids () {
                 console.error(err)
                 return;
             }
-//            console.log(`stdout: ${stdout}`)
-//            console.log(`stderr: ${stderr}`)
         })
-        console.log('ssid_list.txt created\n')
     } catch (error) {
-        console.log('Error Creating File',error)
+        console.log('Error Creating SSID File',error)
     }
 
 }
 
 function read_ssid_list_file () {
 
-    // read from file and set the SHELLY_SSID array
-
-    console.log('Reading ssid_list.txt\n')
+    console.log('Reading ssid_list.txt')
 
     const filePathHost = './ssid_list.txt';
 
@@ -57,15 +51,37 @@ function read_ssid_list_file () {
     // Split the contents into an array of lines
     const linesHost = fileContentsHost.split('\n');
 
-    linesHost.forEach(element => {        
-        console.log(element)
-        element.toLowerCase().includes(RANGE_EXTENDER.toLowerCase)
-        ? SHELLY_HOST.push(element.slice(1,-1))
-        : element.toLowerCase().includes(CLIENT_EXT.toLowerCase)
-          ? SHELLY_CLIENTS.push(element.slice(1,-1))
-          : ""        
+    // for each line we check if it is a Host or Client
+    linesHost.forEach(element => {
+        const ssid = element.slice(27,60)
+
+        if(ssid.toLowerCase().includes(RANGE_EXTENDER.toLowerCase())){
+            SHELLY_HOST.push(ssid.trim())
+            console.log("Host:",ssid.trim())
+        }
+
+
+        if(ssid.toLowerCase().includes(CLIENT_EXT.toLowerCase())){
+            SHELLY_CLIENTS.push(ssid.trim())
+            console.log("Client:",ssid.trim())
+        }
+          
+
     });
 
+}
+
+function delete_ssid_file () {
+    try {
+        exec('./delete_ssid_file.sh',(err, stdout, stderr) => {
+            if(err){
+                console.error(err)
+                return;
+            }
+        })
+    } catch (error) {
+        console.log('Error Deleting SSID File',error)
+    }    
 }
 
 // PROVISIONING FUNCTIONS
@@ -76,77 +92,123 @@ function connectToSSID (SSID) {
             if(err){
                 console.error(err)
                 return;
+            } else {
+                console.log(`Connected to`,SSID)
             }
-//            console.log(`stdout: ${stdout}`)
-//            console.log(`stderr: ${stderr}`)
         })
-        console.log(`Connected to`,SSID)
     } catch (error) {
         console.log('Error Creating File',error)
     }    
 }
 
-async function set_RANGE_EXTENDER_HOST_wifi_credentials (WIFI_SSID,WIFI_PASS) {
+function rebootDevice(gen){
+    let command
+    if(gen === 1){
+        command = `http://192.168.33.1/reboot`
+    } else {
+        command = `http://192.168.33.1/rpc/Shelly.Reboot` 
+    }
+    
     try {
-        console.log("Setting HOST WIFI Credentials\n")
-        const response = await fetch(`http://192.168.33.1/rpc/WiFi.SetConfig?config={"sta":{"ssid":"${WIFI_SSID}","pass":"${WIFI_PASS}","enable":true}}`)
-        // const ret = await response.json()
-        // return true
+        console.log("Rebooting...\n")
+        console.log(command)
+        fetch(command)
     } catch (error) {
         console.error("ERROR \n\n",error)
+        return
+    }
+ 
+}
+
+function set_RANGE_EXTENDER_HOST_wifi_credentials (WIFI_SSID,WIFI_PASS) {
+    const gen = 2
+    const command = `http://192.168.33.1/rpc/WiFi.SetConfig?config={"sta":{"ssid":"${WIFI_SSID}","pass":"${WIFI_PASS}","enable":true},"ap":{"range_extender":{"enable":true}}}`
+    try {
+        console.log("Setting HOST WIFI Credentials")
+        console.log(command)
+        fetch(command)
+        setTimeout(()=>{rebootDevice(gen)},1000)
+    } catch (error) {
+        console.error("ERROR \n\n",error)
+        return
     }
 }
 
-async function set_RANGE_EXTENDER_CLIENT_wifi_credentials (HOST_SSID) {
+function set_RANGE_EXTENDER_CLIENT_wifi_credentials (HOST_SSID, gen) {
+    let command
+    if(gen === 1){
+        command = `http://192.168.33.1/settings/sta?ssid=${HOST_SSID}&key=&enabled=1`
+    } else {
+        command = `http://192.168.33.1/rpc/WiFi.SetConfig?config={"sta":{"ssid":"${HOST_SSID}","pass":"","enable":true}}` 
+    }
+ 
     try {
-        console.log("Setting CLIENT WIFI Credentials\n")
-        const response = await fetch(`http://192.168.33.1/rpc/WiFi.SetConfig?config={"sta":{"ssid":"${HOST_SSID}","pass":"","enable":true}}`)
-        // const ret = await response.json()
-        // return true
+        console.log("Setting CLIENT WIFI Credentials")
+        console.log(command)
+        fetch(command)
     } catch (error) {
         console.error("ERROR \n\n",error)
+        return
     }
+
+    // setTimeout(()=>{rebootDevice(gen)},2000)
 }
 
-function provision () {
-    console.log('\nHost:',SHELLY_HOST[0]);
-    console.log('Client:',SHELLY_CLIENTS[0]);
-     return
+function provision_host () {
+    console.log('Provisioning HOST',SHELLY_HOST[0])
     // connect to RANGE_EXTENDER_HOST
-    setTimeout(()=>{connectToSSID(SHELLY_HOST[0])},delay+20000)
+    connectToSSID(SHELLY_HOST[0])
 
-    // provision host
-    setTimeout(()=>{set_RANGE_EXTENDER_HOST_wifi_credentials(CONFIG_SSID,CONFIG_PASS)},delay+30000)
+    // provision host with desired internet wifi credentials
+    setTimeout(()=>{set_RANGE_EXTENDER_HOST_wifi_credentials(CONFIG_SSID,CONFIG_PASS)},delay*2)
 
+}
+
+function provision_clients () {
+
+    // provision each client with the host credentials
     SHELLY_CLIENTS.forEach((element,index) => {
-        console.log('Provisioning device',element,'-',index + 1,'of',SHELLY_CLIENTS.length)
+        console.log('Provisioning CLIENT',element,'-',index + 1,'of',SHELLY_CLIENTS.length)
 
         // connect to RANGE_EXTENDER_CLIENT
-        setTimeout(()=>{connectToSSID(element)},delay+40000)
+        connectToSSID(element)
 
         // provision client
-        setTimeout(()=>{set_RANGE_EXTENDER_CLIENT_wifi_credentials(SHELLY_HOST[0])},delay+50000)
+        setTimeout(()=>{set_RANGE_EXTENDER_CLIENT_wifi_credentials(SHELLY_HOST[0],CLIENT_GEN)},delay*(index+1))
+        
     });
-    
+
 }
 
-// return a list of shelly devices broadcasting in the wireless network
+function run_provision () {
+
+    setTimeout(()=>{provision_host()},delay)
+
+    setTimeout(()=>{provision_clients()},delay+25000)
+
+}
+
+
+// --------------------------- START EXECUTION HERE 
+``
+// return a list of all devices broadcasting in the wireless network
 list_available_ssids()
-setTimeout(()=>{read_ssid_list_file()},delay)
-// connect to each device for provisioning
-setTimeout(()=>{provision()},delay+10000)
 
+// from the list created we select only the shelly devices we want and assign host and clients
+setTimeout(()=>{read_ssid_list_file()},2000)
 
-// Connect to the plug
-// Enable Range Extender
-// Get plug SSID
+// run provision of host and clients
+setTimeout(()=>{
+    if (SHELLY_HOST.length !== 0) {
 
-// Find all broadcasting HT
-// Get HT SSID
-// if credentials are not set
-// Set wifi credentials to connect to Range Extender
+        if (SHELLY_CLIENTS.length !== 0){
+            console.log("Provisioning...\n")
+            run_provision()
+        } else 
+            console.log('No clients found')
 
-// Check how many HTs are connected to the PLUG
-// If less than 10 - Redo process
-
-// ShellyPlugUS
+    } else {
+        console.log('No host found')
+    }
+    delete_ssid_file()
+},delay+5000)

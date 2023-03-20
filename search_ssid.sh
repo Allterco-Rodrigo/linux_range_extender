@@ -1,1 +1,1 @@
-sudo iwlist scanning | grep ESSID | awk -F: '{print $2}' > ssid_list.txt
+sudo nmcli device wifi list > ssid_list.txt
