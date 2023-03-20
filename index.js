@@ -22,7 +22,7 @@ let CONFIG_SSID = "";
 let CONFIG_PASS = "";
 const delay = 20000;
 
-// return a list of shelly devices available in the wifi
+
 function ssid_list () {
     console.log('Searching for device in the Network \n')
     
@@ -57,7 +57,6 @@ function ssid_list () {
 
 };
 
-// bring back the values from the file
 function read_file () {
 
     const filePathHost = './shelly_devices_broadcasting.txt';
@@ -129,7 +128,6 @@ async function set_RANGE_EXTENDER_CLIENT_wifi_credentials (HOST_SSID) {
     }
 }
 
-// connect to each device for provisioning
 function provision () {
     
     // connect to RANGE_EXTENDER_HOST
@@ -150,9 +148,13 @@ function provision () {
     
 }
 
-
+// return a list of shelly devices available in the wifi 
 ssid_list()
+
+// bring back the values from the file
 setTimeout(()=>{read_file()},delay)
+
+// connect to each device for provisioning
 setTimeout(()=>{provision()},delay)
 
 
@@ -168,4 +170,4 @@ setTimeout(()=>{provision()},delay)
 // Check how many HTs are connected to the PLUG
 // If less than 10 - Redo process
 
-ShellyPlugUS
+// ShellyPlugUS
