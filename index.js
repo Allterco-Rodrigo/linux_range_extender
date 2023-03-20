@@ -53,6 +53,7 @@ function read_ssid_list_file () {
 
     // for each line we check if it is a Host or Client
     linesHost.forEach(element => {
+
         const ssid = element.slice(27,60)
 
         if(ssid.toLowerCase().includes(RANGE_EXTENDER.toLowerCase())){
@@ -120,6 +121,19 @@ function rebootDevice(gen){
  
 }
 
+function update_RANGE_EXTENDER_firmware () {
+    const gen = 2
+    const command = `http://192.168.33.1/rpc/Shelly.Update`
+    try {
+        console.log("Update Firmware - 15 sec wait")
+        console.log(command)
+        fetch(command)
+    } catch (error) {
+        console.error("ERROR \n\n",error)
+        return
+    }
+}
+
 function set_RANGE_EXTENDER_HOST_wifi_credentials (WIFI_SSID,WIFI_PASS) {
     const gen = 2
     const command = `http://192.168.33.1/rpc/WiFi.SetConfig?config={"sta":{"ssid":"${WIFI_SSID}","pass":"${WIFI_PASS}","enable":true},"ap":{"range_extender":{"enable":true}}}`
@@ -156,11 +170,14 @@ function set_RANGE_EXTENDER_CLIENT_wifi_credentials (HOST_SSID, gen) {
 
 function provision_host () {
     console.log('Provisioning HOST',SHELLY_HOST[0])
+
     // connect to RANGE_EXTENDER_HOST
     connectToSSID(SHELLY_HOST[0])
 
+    setTimeout(()=>{update_RANGE_EXTENDER_firmware},delay)
+
     // provision host with desired internet wifi credentials
-    setTimeout(()=>{set_RANGE_EXTENDER_HOST_wifi_credentials(CONFIG_SSID,CONFIG_PASS)},delay*2)
+    setTimeout(()=>{set_RANGE_EXTENDER_HOST_wifi_credentials(CONFIG_SSID,CONFIG_PASS)},delay*6)
 
 }
 
@@ -180,17 +197,9 @@ function provision_clients () {
 
 }
 
-function run_provision () {
-
-    setTimeout(()=>{provision_host()},delay)
-
-    setTimeout(()=>{provision_clients()},delay+25000)
-
-}
-
 
 // --------------------------- START EXECUTION HERE 
-``
+
 // return a list of all devices broadcasting in the wireless network
 list_available_ssids()
 
@@ -203,12 +212,16 @@ setTimeout(()=>{
 
         if (SHELLY_CLIENTS.length !== 0){
             console.log("Provisioning...\n")
-            run_provision()
+            setTimeout(()=>{provision_host()},delay)
+
         } else 
             console.log('No clients found')
 
     } else {
         console.log('No host found')
     }
-    delete_ssid_file()
 },delay+5000)
+
+// prompt to provision client
+
+setTimeout(()=>{provision_clients()},delay+25000)
