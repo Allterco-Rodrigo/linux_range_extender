@@ -13,6 +13,7 @@ import fetch from 'node-fetch';
 import { exec } from 'child_process'
 import fs from 'fs';
 import { CONFIG_PASS, CONFIG_SSID } from './config.js';
+import * as readline from 'node:readline';
 
 // Find broadcasting PLUG US that will be our Range Extender
 const RANGE_EXTENDER = "ShellyPlugUS";
@@ -181,47 +182,76 @@ function provision_host () {
 
 }
 
-function provision_clients () {
+function provision_clients (ind) {
 
-    // provision each client with the host credentials
-    SHELLY_CLIENTS.forEach((element,index) => {
-        console.log('Provisioning CLIENT',element,'-',index + 1,'of',SHELLY_CLIENTS.length)
+    console.log('Provisioning CLIENT');
 
-        // connect to RANGE_EXTENDER_CLIENT
-        connectToSSID(element)
+    // connect to RANGE_EXTENDER_CLIENT
+    connectToSSID(SHELLY_CLIENTS[ind])
 
-        // provision client
-        setTimeout(()=>{set_RANGE_EXTENDER_CLIENT_wifi_credentials(SHELLY_HOST[0],CLIENT_GEN)},delay*(index+1))
-        
-    });
+    // provision client
+    setTimeout(()=>{set_RANGE_EXTENDER_CLIENT_wifi_credentials(SHELLY_HOST[0],CLIENT_GEN)},delay)
 
 }
 
 
 // --------------------------- START EXECUTION HERE 
 
-// return a list of all devices broadcasting in the wireless network
-list_available_ssids()
+// // return a list of all devices broadcasting in the wireless network
+// list_available_ssids()
 
-// from the list created we select only the shelly devices we want and assign host and clients
-setTimeout(()=>{read_ssid_list_file()},2000)
+// // from the list created we select only the shelly devices we want and assign host and clients
+// setTimeout(()=>{read_ssid_list_file()},2000)
 
-// run provision of host and clients
-setTimeout(()=>{
-    if (SHELLY_HOST.length !== 0) {
+// // run provision of host and clients
+// setTimeout(()=>{
+//     if (SHELLY_HOST.length !== 0) {
 
-        if (SHELLY_CLIENTS.length !== 0){
-            console.log("Provisioning...\n")
-            setTimeout(()=>{provision_host()},delay)
+//         if (SHELLY_CLIENTS.length !== 0){
+//             console.log("Provisioning...\n")
+//             setTimeout(()=>{provision_host()},delay)
 
-        } else 
-            console.log('No clients found')
+//         } else 
+//             console.log('No clients found')
 
-    } else {
-        console.log('No host found')
-    }
-},delay+5000)
+//     } else {
+//         console.log('No host found')
+//     }
+// },delay+5000)
 
-// prompt to provision client
+// setTimeout(()=>{provision_clients()},delay+25000)
 
-setTimeout(()=>{provision_clients()},delay+25000)
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
+
+let counter = 0;
+
+function myFunction(counter) {
+  provision_clients(counter)
+}
+
+function promptUser() {
+  if (counter < 10) {
+    rl.question('Do you want to start provisioning a device? (y/n) ', (answer) => {
+      if (answer.toLowerCase() === 'y') {
+        myFunction(counter);
+        counter++;
+        promptUser();
+      } else if (answer.toLowerCase() === 'n') {
+        console.log('Provisioning execution stopped by user.');
+        rl.close();
+      } else {
+        console.log('Invalid input, please try again.');
+        promptUser();
+      }
+    });
+  } else {
+    console.log('Provisioning finished. Exiting program.');
+    rl.close();
+  }
+}
+
+promptUser();

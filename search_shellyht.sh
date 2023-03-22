@@ -1,0 +1,1 @@
+sudo iwlist scanning | grep 'ESSID:\"shellyht' | awk -F: '{print $2}' > shellyht_broadcasting.txt
