@@ -56,10 +56,10 @@ function provisionHost () {
     // for each line we check if it is a Host or Client
     linesHost.forEach(element => {
 
-        const ssid = element.slice(27,60)
+        const ssid = element.slice(27,58)
         
         if(ssid.toLowerCase().includes(RANGE_EXTENDER.toLowerCase())){
-            SHELLY_HOST.push(ssid.trim())
+            SHELLY_HOST[0]=ssid.trim()
         }
           
     });
@@ -91,14 +91,14 @@ function getClientFromFile () {
     // for each line we check if it is a Host or Client
     linesHost.forEach(element => {
 
-        const ssid = element.slice(27,60)
-
+        const ssid = element.slice(27,58)
         if(ssid.toLowerCase().includes(RANGE_EXTENDER.toLowerCase())){
             SHELLY_HOST[0]= ssid.trim()
         }
 
         if(ssid.toLowerCase().includes(CLIENT_EXT.toLowerCase())){
             SHELLY_CLIENT[0] = ssid.trim()
+            console.log("Device found:",SHELLY_CLIENT[0])
         }
           
     });
@@ -171,7 +171,7 @@ function update_RANGE_EXTENDER_firmware () {
     const command = `http://192.168.33.1/rpc/Shelly.Update?stage="stable"`
     try {
         console.log("Update Firmware - 15 sec wait")
-        console.log(command)
+        // console.log(command)
         fetch(command)
     } catch (error) {
         console.error("ERROR \n\n",error)
@@ -185,11 +185,11 @@ function set_HOST_wifi_credentials (WIFI_SSID,WIFI_PASS) {
     const commandRE = `http://192.168.33.1/rpc/WiFi.SetConfig?config={"ap":{"range_extender":{"enable":true}}}`
     try {
         console.log("Setting HOST WIFI Credentials")
-        console.log(commandWF)
+        // console.log(commandWF)
         setTimeout(()=>{fetch(commandWF)},1000)
 
-        console.log("Enabling HOST RE")
-        console.log(commandRE)
+        console.log("Enabling HOST Range Extender")
+        // console.log(commandRE)
         setTimeout(()=>{fetch(commandRE)},2000)
 
         setTimeout(()=>{rebootDevice(gen)},3000)
@@ -210,7 +210,8 @@ function set_CLIENT_wifi_credentials (HOST_SSID, gen) {
     try {
         console.log("Setting CLIENT WIFI Credentials")
         console.log(command)
-        fetch(command)
+        setTimeout(()=>{fetch(command)},1000)
+        //fetch(command)
     } catch (error) {
         console.error("ERROR \n\n",error)
         return
@@ -283,10 +284,11 @@ function provision () {
             // prompt user for directions
             setTimeout(()=>{ provision() },60000)
         } else if (answer.toLowerCase() === 'n') {
+            console.log('End of Host Provisioning')
             setTimeout(()=>{
                 console.log('\nStart provisioning Clients')
                 provisionClient()   
-            },10000)
+            },5000)
         } else {
             console.log('Invalid input, please try again.');
             provision();
