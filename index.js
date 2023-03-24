@@ -97,25 +97,13 @@ function getClientFromFile () {
         }
 
         if(ssid.toLowerCase().includes(CLIENT_EXT.toLowerCase())){
-            SHELLY_CLIENT[0] = ssid.trim()
-            console.log("Device found:",SHELLY_CLIENT[0])
+            SHELLY_CLIENT.push(ssid.trim())
+            console.log("Device found:",ssid.trim())
         }
           
     });
 
-    setTimeout(()=>{
-        
-        if(!SHELLY_CLIENT.length > 0){
-            console.log('No devices to be set as client found.')
-            counter--;
-            provisionClient()
-        } else {
-            provision_client()
-        }
-        
-    },5000)
 }
-
 
 function delete_ssid_file () {
     try {
@@ -136,14 +124,15 @@ function connectToSSID (SSID) {
     try {
         exec(`sudo nmcli dev wifi connect ${SSID}`,(err, stdout, stderr) => {
             if(err){
-                console.error(err)
-                return;
-            } else {
-                console.log(`Connected to`,SSID)
+                console.error('Could not connect to device',SSID)
+                return err.code
             }
         })
+        // console.log(`Connected to`,SSID)
+        return 0        
     } catch (error) {
         console.log('Error Creating File',error)
+        return -1
     }    
 }
 
@@ -156,8 +145,8 @@ function rebootDevice(gen){
     }
     
     try {
-        console.log("Rebooting...")
-        console.log(command)
+        // console.log("Rebooting...")
+        // console.log(command)
         fetch(command)
     } catch (error) {
         console.error("ERROR \n\n",error)
@@ -170,7 +159,7 @@ function update_RANGE_EXTENDER_firmware () {
     const gen = 2
     const command = `http://192.168.33.1/rpc/Shelly.Update?stage="stable"`
     try {
-        console.log("Update Firmware - 15 sec wait")
+        console.log("Update Firmware - 15 sec wait\n\n!!! Turn on all devices to be provisioned now !!!")
         // console.log(command)
         fetch(command)
     } catch (error) {
@@ -184,15 +173,19 @@ function set_HOST_wifi_credentials (WIFI_SSID,WIFI_PASS) {
     const commandWF = `http://192.168.33.1/rpc/WiFi.SetConfig?config={"sta":{"ssid":"${WIFI_SSID}","pass":"${WIFI_PASS}","enable":true}}`
     const commandRE = `http://192.168.33.1/rpc/WiFi.SetConfig?config={"ap":{"range_extender":{"enable":true}}}`
     try {
-        console.log("Setting HOST WIFI Credentials")
+        // console.log("Setting HOST WIFI Credentials")
         // console.log(commandWF)
         setTimeout(()=>{fetch(commandWF)},1000)
 
-        console.log("Enabling HOST Range Extender")
+        // console.log("Enabling HOST Range Extender")
         // console.log(commandRE)
         setTimeout(()=>{fetch(commandRE)},2000)
 
-        setTimeout(()=>{rebootDevice(gen)},3000)
+        setTimeout(()=>{
+            rebootDevice(gen)
+            // while the HOST reboots, we list all available clients
+            list_available_ssids()
+        },3000)
     } catch (error) {
         console.error("ERROR \n\n",error)
         return
@@ -208,8 +201,8 @@ function set_CLIENT_wifi_credentials (HOST_SSID, gen) {
     }
  
     try {
-        console.log("Setting CLIENT WIFI Credentials")
-        console.log(command)
+        // console.log("Setting CLIENT WIFI Credentials")
+        // console.log(command)
         setTimeout(()=>{fetch(command)},1000)
         //fetch(command)
     } catch (error) {
@@ -224,7 +217,9 @@ function provision_host () {
     console.log('Provisioning HOST',SHELLY_HOST[0])
 
     // connect to RANGE_EXTENDER_HOST
-    connectToSSID(SHELLY_HOST[0])
+    const retCode = connectToSSID(SHELLY_HOST[0])
+    if(retCode !== 0)
+        return
 
     setTimeout(()=>{update_RANGE_EXTENDER_firmware()},delay)
 
@@ -233,12 +228,14 @@ function provision_host () {
 
 }
 
-function provision_client () {
+function provision_client (i) {
 
-    console.log('Provisioning CLIENT',SHELLY_CLIENT[0]);
+    console.log(`Provisioning CLIENT #${i+1}`,SHELLY_CLIENT[i]);
 
     // connect to RANGE_EXTENDER_CLIENT
-    connectToSSID(SHELLY_CLIENT[0])
+    const retCode = connectToSSID(SHELLY_CLIENT[i])
+    if(retCode !== 0)
+        return
 
     // provision client
     setTimeout(()=>{set_CLIENT_wifi_credentials(SHELLY_HOST[0],CLIENT_GEN)},delay)
@@ -250,31 +247,35 @@ const rl = readline.createInterface({
   output: process.stdout
 });
 
-let counter = 0;
-
 function provisionClient() {
-    if (counter < 10) {
-        rl.question('Do you want to start provisioning a new client? (y/n)', (answer) => {
-            if (answer.toLowerCase() === 'y') {
-                counter++;
-                console.log('Turn on the client device now.')
-                list_available_ssids()
-                setTimeout(()=>{ getClientFromFile() },10000)
-                setTimeout(()=>{ provisionClient() },30000)
-            } else if (answer.toLowerCase() === 'n') {
-                console.log('Provisioning execution stopped by user.');
-                exit(1)
+    rl.question('Do you want to start provisioning a new client? (y/n)', (answer) => {
+        if (answer.toLowerCase() === 'y') {
+            getClientFromFile()
+            if(!SHELLY_CLIENT.length > 0){
+                console.log('No devices to be set as client found.')
+                provisionClient()
             } else {
-                console.log('Invalid input, please try again.');
-                provisionClient();
+                console.log(SHELLY_CLIENT.length,"devices found")
             }
-        });
-    } else {
-        console.log('Provisioning finished. Exiting program.');
-        rl.close();
-    }  
+            let outDelay = 0
+            for (let i = 0; i < SHELLY_CLIENT.length; i++) {
+                setTimeout(()=>{ provision_client(i) },delay*2*i)
+            }
+            setTimeout(()=>{ 
+                console.log("All devices provisioned")
+                console.timeEnd("program-time")
+                exit(0)
+            },delay*2*(SHELLY_CLIENT.length+1))
+        } else if (answer.toLowerCase() === 'n') {
+            console.log('Provisioning execution stopped by user.');
+            console.timeEnd("program-time")
+            exit(1)
+        } else {
+            console.log('Invalid input, please try again.');
+            provisionClient();
+        }
+    }); 
 }
-
 
 function provision () {
     rl.question('Do you want to start provisioning a new host? (y/n)', (answer) => {
@@ -298,7 +299,7 @@ function provision () {
 }
 
 // --------------------------- START EXECUTION HERE 
-
+console.time("program-time")
 // return a list of all devices broadcasting in the wireless network
 console.log('Provisioning Program Started')
 list_available_ssids()
